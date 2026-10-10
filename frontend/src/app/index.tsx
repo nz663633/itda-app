@@ -1,3 +1,4 @@
+// 시작 화면.
 import { useRouter } from 'expo-router';
 import { Image, Pressable, StyleSheet, Text, View, } from 'react-native';
 
@@ -16,14 +17,12 @@ export default function StartScreen() {
 
         <Pressable
           style={styles.loginButton}
-          onPress={() => router.push('/login')}
         >
           <Text style={styles.loginText}>로그인</Text>
         </Pressable>
 
         <Pressable
           style={styles.signupButton}
-          onPress={() => router.push('/signup')}
         >
           <Text style={styles.signupText}>회원가입</Text>
         </Pressable>

@@ -1,3 +1,4 @@
+//하단 탭
 import { usePathname, useRouter } from 'expo-router';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
