@@ -11,7 +11,7 @@ import { Image,
         } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { login as kakaoLogin } from '@react-native-seoul/kakao-login';
+import {  login as kakaoLogin } from '@react-native-seoul/kakao-login';
 import NaverLogin from '@react-native-seoul/naver-login';
 import * as SecureStore from 'expo-secure-store';
 
