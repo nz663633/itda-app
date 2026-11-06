@@ -1,11 +1,28 @@
 //홈 화면.
 import AppTabs from '@/components/app-tabs';
-import { Text, View, Image, Pressable, ScrollView, StyleSheet, Animated, PanResponder, } from 'react-native';
-import {useRef} from 'react';
+import { Text, View, Image, Pressable, ScrollView, StyleSheet, Animated, PanResponder, Modal, TextInput} from 'react-native';
+import {useRef, useState} from 'react';
+import KakaoMap, { KakaoMapHandle, Place } from '@/components/kakao-map';
 
 export default function HomeScreen() {
   {/* 지도 드래그 설정 */}
 const mapHeight = useRef(new Animated.Value(90)).current;
+const mapRef = useRef<KakaoMapHandle>(null);
+const [searchVisible, setSearchVisible] = useState(false);
+const [keyword, setKeyword] = useState('');
+const [results, setResults] = useState<Place[]>([]);
+const handleSearch = () => {
+  if (!keyword.trim()) return;
+  mapRef.current?.searchPlace(keyword);
+};
+const handleSelect = (place: Place) => {
+  mapRef.current?.addMarker(place);
+  setSearchVisible(false);
+  setKeyword('');
+  setResults([]);
+  // 지도 영역 펼치기
+  Animated.spring(mapHeight, { toValue: 700, useNativeDriver: false }).start();
+};
 const panResponder = PanResponder.create({  //panResponder : 사용자 터치, 드래그 동작 감지
   onMoveShouldSetPanResponder: (_, gesture) => {
     return Math.abs(gesture.dy) > 5;
@@ -115,21 +132,60 @@ const panResponder = PanResponder.create({  //panResponder : 사용자 터치, �
             </View>
           </View>
         </View>
-
         </ScrollView>
 
         <Animated.View style={[styles.mapSection, { height: mapHeight}]}>
-          <View style={styles.mapHandle}
-          {...panResponder.panHandlers}>
-            <View style={styles.handle} /></View>
-            <Text style={styles.mapTitle}>내 여행 지도</Text>
-            <Text style={styles.mapSubTitle}>
+            <KakaoMap ref={mapRef} onSearchResult={setResults}/>
+
+            <View style={styles.mapOverlay}>
+              <View style={styles.mapHandle} {...panResponder.panHandlers}>
+                <View style={styles.handle} />
+              </View>
+              
+              <Text style={styles.mapTitle}>내 여행 지도</Text>
+              <Text style={styles.mapSubTitle}>
               위로 올려 여행 기록을 확인해보세요
-            </Text>
-      
+              </Text>
+             </View>
+
+            <Pressable
+              style={styles.addMarkerButton}
+              onPress={() => {
+                    setSearchVisible(true)
+              }}
+            >
+                <Text style={styles.addMarkerText}>+</Text>
+            </Pressable>
         </Animated.View>
       
+      <Modal visible={searchVisible} animationType="slide" onRequestClose={() => setSearchVisible(false)}>
+  <View style={styles.searchContainer}>
+    <View style={styles.searchHeader}>
+      <TextInput
+        style={styles.searchInput}
+        placeholder="다녀온 장소를 검색해보세요"
+        value={keyword}
+        onChangeText={setKeyword}
+        onSubmitEditing={handleSearch}
+        returnKeyType="search"
+        autoFocus
+      />
+      <Pressable onPress={() => setSearchVisible(false)}>
+        <Text style={styles.searchClose}>닫기</Text>
+      </Pressable>
+    </View>
 
+    <ScrollView keyboardShouldPersistTaps="handled">
+      {results.map((place) => (
+        <Pressable key={place.id} style={styles.resultItem} onPress={() => handleSelect(place)}>
+          <Text style={styles.resultName}>{place.name}</Text>
+          <Text style={styles.resultAddress}>{place.address}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  </View>
+</Modal>
+      
       <AppTabs />
 
     </View>
@@ -363,4 +419,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999999',
   },
+mapOverlay: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 10,
+},
+/*마커 추가 버튼 */
+addMarkerButton: {
+  position: 'absolute',
+  right: 20,
+  bottom: 20,
+
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+
+  backgroundColor: '#FFFFFF',
+
+  justifyContent: 'center',
+  alignItems: 'center',
+
+  elevation: 5,
+
+  shadowColor: '#000',
+  shadowOpacity: 0.15,
+  shadowRadius: 5,
+  shadowOffset: {
+    width: 0,
+    height: 2,
+  },
+},
+
+addMarkerText: {
+  fontSize: 30,
+  fontWeight: '300',
+  color: '#208AEF',
+  lineHeight: 32,
+},
+searchContainer: { flex: 1, backgroundColor: '#fff', paddingTop: 60 },
+searchHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 12 },
+searchInput: { flex: 1, height: 44, borderRadius: 12, backgroundColor: '#f2f2f2', paddingHorizontal: 14, fontSize: 16 },
+searchClose: { fontSize: 16, color: '#555' },
+resultItem: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
+resultName: { fontSize: 16, fontWeight: '600' },
+resultAddress: { fontSize: 13, color: '#888', marginTop: 2 }
 });
+
