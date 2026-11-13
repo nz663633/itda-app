@@ -1,5 +1,6 @@
 //화면 레이아웃
 import { Stack } from 'expo-router';
+import "../firebase";
 
 export default function RootLayout() {
   return (
