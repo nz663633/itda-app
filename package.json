@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "firebase": "^13.3.0",
+    "react-native-dotenv": "^5.0.0"
+  }
+}
