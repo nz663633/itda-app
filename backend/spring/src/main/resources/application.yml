@@ -1,0 +1,20 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=require
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+jwt:
+  secret: ${JWT_SECRET}  # 실제 값은 .env에 (깃에 안 올라감)
+  expiration-ms: 3600000
+  refresh-expiration-days: 30
+
+server:
+  port: 3000
