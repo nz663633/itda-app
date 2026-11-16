@@ -6,6 +6,7 @@
     "@expo/ui": "~57.0.20",
     "@react-native-seoul/kakao-login": "^6.0.4",
     "@react-native-seoul/naver-login": "^5.0.1",
+    "axios": "^1.21.0",
     "expo": "~57.0.25",
     "expo-auth-session": "~57.0.15",
     "expo-build-properties": "~57.0.22",
