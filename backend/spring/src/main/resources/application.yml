@@ -17,4 +17,4 @@ jwt:
   refresh-expiration-days: 30
 
 server:
-  port: 3000
+  port: ${PORT:3000}
