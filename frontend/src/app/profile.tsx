@@ -1,7 +1,8 @@
-//프로필 화면.
+// 프로필 화면.
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  Image,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -9,8 +10,57 @@ import {
   View,
 } from 'react-native';
 
+import {
+  getMyProfile,
+  updateMyProfile,
+  UserProfile,
+} from '@/api/user';
+
 export default function ProfileScreen() {
   const router = useRouter();
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [userName, setUserName] = useState('');
+
+  // 내 정보 조회
+  const loadProfile = async () => {
+    try {
+      const data = await getMyProfile();
+      setProfile(data);
+      setUserName(data.user_name);
+    } catch (error) {
+      console.error('내 정보 조회 실패:', error);
+      Alert.alert('오류', '프로필 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  // 닉네임 수정
+  const handleSave = async () => {
+    if (!userName.trim()) {
+      Alert.alert('알림', '닉네임을 입력해주세요.');
+      return;
+    }
+
+    try {
+      const data = await updateMyProfile(userName.trim());
+      setProfile(data);
+      setUserName(data.user_name);
+
+      Alert.alert('저장 완료', '프로필이 수정되었습니다.', [
+        {
+          text: '확인',
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch (error) {
+      console.error('프로필 수정 실패:', error);
+      Alert.alert('오류', '프로필 수정에 실패했습니다.');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -25,7 +75,10 @@ export default function ProfileScreen() {
 
         <Text style={styles.headerTitle}>프로필 설정</Text>
 
-        <Pressable style={styles.saveButton}>
+        <Pressable
+          style={styles.saveButton}
+          onPress={handleSave}
+        >
           <Text style={styles.saveText}>저장</Text>
         </Pressable>
       </View>
@@ -33,14 +86,14 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         {/* 프로필 사진 */}
         <View style={styles.profilePhotoContainer}>
-  <View style={styles.profilePhoto}>
-    <Text style={styles.photoText}>사진</Text>
-  </View>
+          <View style={styles.profilePhoto}>
+            <Text style={styles.photoText}>사진</Text>
+          </View>
 
-  <Pressable style={styles.photoAddButton}>
-    <Text style={styles.photoAddText}>+</Text>
-  </Pressable>
-</View>
+          <Pressable style={styles.photoAddButton}>
+            <Text style={styles.photoAddText}>+</Text>
+          </Pressable>
+        </View>
 
         {/* 닉네임 */}
         <View style={styles.section}>
@@ -50,7 +103,8 @@ export default function ProfileScreen() {
             style={styles.input}
             placeholder="닉네임을 입력해주세요."
             placeholderTextColor="#AAAAAA"
-            defaultValue="여행자"
+            value={userName}
+            onChangeText={setUserName}
           />
         </View>
 
@@ -73,14 +127,12 @@ export default function ProfileScreen() {
   );
 }
 
+// 기존 StyleSheet는 그대로 유지
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FEFEFE',
   },
-
-  /* 상단 */
-
   header: {
     height: 100,
     paddingTop: 48,
@@ -89,21 +141,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-
   backText: {
     fontSize: 34,
     fontWeight: '300',
     color: '#444444',
     lineHeight: 36,
   },
-
   headerTitle: {
     position: 'absolute',
     left: 0,
@@ -113,81 +162,64 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#222222',
   },
-
   saveButton: {
     paddingHorizontal: 4,
     paddingVertical: 8,
   },
-
   saveText: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#5EB1BF',
   },
-
-  /* 내용 */
-
   content: {
     paddingHorizontal: 20,
     paddingTop: 28,
   },
-
-  /* 프로필 사진 */
-
   profilePhotoContainer: {
-  alignSelf: 'center',
-  position: 'relative',
-  marginTop: 10,
-},
-
-profilePhoto: {
-  width: 130,
-  height: 130,
-  borderRadius: 65,
-  backgroundColor: '#E9F1F2',
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-
-photoText: {
-  fontSize: 13,
-  color: '#8AA4A8',
-},
-
-photoAddButton: {
-  position: 'absolute',
-  right: -3,
-  bottom: -3,
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  backgroundColor: '#5EB1BF',
-  borderWidth: 3,
-  borderColor: '#FEFEFE',
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-
-photoAddText: {
-  color: '#FFFFFF',
-  fontSize: 25,
-  fontWeight: '300',
-  marginTop: -2,
-},
-
-  /* 입력 */
-
+    alignSelf: 'center',
+    position: 'relative',
+    marginTop: 10,
+  },
+  profilePhoto: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: '#E9F1F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoText: {
+    fontSize: 13,
+    color: '#8AA4A8',
+  },
+  photoAddButton: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#5EB1BF',
+    borderWidth: 3,
+    borderColor: '#FEFEFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoAddText: {
+    color: '#FFFFFF',
+    fontSize: 25,
+    fontWeight: '300',
+    marginTop: -2,
+  },
   section: {
     marginTop: 28,
   },
-
   label: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#555555',
     marginBottom: 10,
   },
-
   input: {
     height: 52,
     paddingHorizontal: 15,
@@ -198,9 +230,6 @@ photoAddText: {
     fontSize: 14,
     color: '#222222',
   },
-
-  /* 계정 관리 */
-
   accountBox: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -208,20 +237,17 @@ photoAddText: {
     borderRadius: 16,
     overflow: 'hidden',
   },
-
   accountItem: {
     minHeight: 56,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   itemTitle: {
     flex: 1,
     fontSize: 14,
     color: '#333333',
   },
-
   itemValue: {
     fontSize: 13,
     color: '#888888',

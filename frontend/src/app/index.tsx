@@ -1,25 +1,27 @@
-// 시작 화면.
+//시작 화면 
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { Image, 
-         Pressable, 
-         StyleSheet, 
-         Text, 
-         View, 
-         Alert, 
-         ActivityIndicator
-        } from 'react-native';
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import {  login as kakaoLogin } from '@react-native-seoul/kakao-login';
+import { login as kakaoLogin } from '@react-native-seoul/kakao-login';
 import NaverLogin from '@react-native-seoul/naver-login';
 import * as SecureStore from 'expo-secure-store';
 
 WebBrowser.maybeCompleteAuthSession();
 
-  const API_URL = 'http://10.0.2.2:3000/api/auth/login';
+const API_URL = 'http://10.0.2.2:3000/api/auth/login';
 
-  type Provider = 'kakao' | 'naver' | 'google';
+type Provider = 'kakao' | 'naver' | 'google';
 
 export default function StartScreen() {
   const router = useRouter();
@@ -43,8 +45,9 @@ export default function StartScreen() {
   useEffect(() => {
     const checkLogin = async () => {
       try {
-        const token = await SecureStore.getItemAsync('authToken');
-        if (token) {
+        const accessToken = await SecureStore.getItemAsync('accessToken');
+
+        if (accessToken) {
           router.replace('/home');
         }
       } catch (error) {
@@ -55,11 +58,16 @@ export default function StartScreen() {
     checkLogin();
   }, [router]);
 
-  // 서버에 소셜 토큰 전달 → JWT 저장 → 화면 이동 (공통)
-  const loginToServer = async (provider: Provider, providerToken: string) => {
+  // 서버에 소셜 토큰 전달 → JWT 저장 → 화면 이동
+  const loginToServer = async (
+    provider: Provider,
+    providerToken: string
+  ) => {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         provider,
         provider_token: providerToken,
@@ -71,26 +79,34 @@ export default function StartScreen() {
     if (!res.ok) {
       throw new Error(result.message || '서버 로그인 실패');
     }
-    if (!result.token) {
+
+    // 서버에서 발급한 JWT 토큰 확인
+    if (!result.token || !result.refresh_token) {
       throw new Error('서버 토큰 오류');
     }
 
-    await SecureStore.setItemAsync('authToken', result.token);
+    // Access Token과 Refresh Token 저장
+    await SecureStore.setItemAsync('accessToken', result.token);
+    await SecureStore.setItemAsync('refreshToken', result.refresh_token);
 
-    // 나중에 취향 질문 화면이 준비되면 해당 화면으로 변경
+    // 홈 화면 이동
     router.replace('/home');
   };
 
-  // 로딩 처리 + 에러 처리 (공통)
-  // getToken: 각 소셜 SDK로 로그인해서 accessToken을 돌려주는 함수
+  // 공통 소셜 로그인 처리
   const handleSocialLogin = async (
     provider: Provider,
     getToken: () => Promise<string>
   ) => {
     try {
       setLoading(true);
-      const token = await getToken();
-      await loginToServer(provider, token);
+
+      // 소셜 플랫폼에서 발급한 토큰
+      const socialToken = await getToken();
+
+      // 소셜 토큰을 서버로 전달
+      await loginToServer(provider, socialToken);
+
     } catch (error) {
       Alert.alert(
         '로그인 실패',
@@ -101,44 +117,47 @@ export default function StartScreen() {
     }
   };
 
-  // 구글: 인증 성공하면 서버로 전달
+  // 구글 로그인
   useEffect(() => {
     if (response?.type === 'success') {
-      const accessToken = response.authentication?.accessToken;
-      if (accessToken) {
-        handleSocialLogin('google', async () => accessToken);
+      const socialToken = response.authentication?.accessToken;
+
+      if (socialToken) {
+        handleSocialLogin('google', async () => socialToken);
       }
     }
   }, [response]);
 
-  // 카카오
+  // 카카오 로그인
   const handleKakaoLogin = () =>
     handleSocialLogin('kakao', async () => {
       const kakaoToken = await kakaoLogin();
       return kakaoToken.accessToken;
     });
 
-  // 네이버
+  // 네이버 로그인
   const handleNaverLogin = () =>
     handleSocialLogin('naver', async () => {
-      const { successResponse, failureResponse } = await NaverLogin.login();
+      const { successResponse, failureResponse } =
+        await NaverLogin.login();
+
       if (!successResponse) {
-        throw new Error(failureResponse?.message || '네이버 로그인 실패');
+        throw new Error(
+          failureResponse?.message || '네이버 로그인 실패'
+        );
       }
+
       return successResponse.accessToken;
     });
 
-
   return (
     <View style={styles.container}>
-
       <Image
         source={require('@/assets/images/start.png')}
         style={styles.background}
       />
 
       <View style={styles.buttonContainer}>
-
         <Pressable
           style={[styles.socialButton, styles.kakaoButton]}
           onPress={handleKakaoLogin}
@@ -147,15 +166,20 @@ export default function StartScreen() {
           {loading ? (
             <ActivityIndicator color="#191919" />
           ) : (
-            <Text style={styles.kakaoText}>카카오로 시작하기</Text>
+            <Text style={styles.kakaoText}>
+              카카오로 시작하기
+            </Text>
           )}
         </Pressable>
 
         <Pressable
           style={[styles.socialButton, styles.naverButton]}
           onPress={handleNaverLogin}
+          disabled={loading}
         >
-          <Text style={styles.naverText}>네이버로 시작하기</Text>
+          <Text style={styles.naverText}>
+            네이버로 시작하기
+          </Text>
         </Pressable>
 
         <Pressable
@@ -163,14 +187,18 @@ export default function StartScreen() {
           onPress={() => promptAsync()}
           disabled={!request || loading}
         >
-          <Text style={styles.googleText}>구글로 시작하기</Text>
+          <Text style={styles.googleText}>
+            구글로 시작하기
+          </Text>
         </Pressable>
 
-
-        <Pressable onPress={() => router.push('/home')}>
-          <Text style={styles.guestText}>로그인 없이 둘러보기</Text>
+        <Pressable
+          onPress={() => router.push('/home')}
+        >
+          <Text style={styles.guestText}>
+            로그인 없이 둘러보기
+          </Text>
         </Pressable>
-
       </View>
     </View>
   );

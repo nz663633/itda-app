@@ -1,6 +1,6 @@
 //트래블 보드 화면.
 import AppTabs from '@/components/app-tabs';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -8,36 +8,121 @@ import {
   Text,
   TextInput,
   View,
+  Alert
 } from 'react-native';
+import {
+  getBoards,
+  getBoardDetail,
+  updateBoard,
+  deleteBoard,
+  type Board,
+  type BoardDetail,
+} from '@/api/board';
 
 export default function BoardScreen() {
-  // 선택한 여행
-  const [selectedTravel, setSelectedTravel] = useState<string | null>(null);
 
-  // 트래블보드 탭
+  // 선택한 여행
+
+  const [selectedTravel, setSelectedTravel] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('이미지');
 
-  const travels = [
-    {
-      id: '1',
-      title: '제주도 여행',
-      date: '2026.09.05 ~ 2026.09.07',
-      places: '제주 · 성산 · 우도',
-    },
-    {
-      id: '2',
-      title: '부산 여행',
-      date: '2026.04.20 ~ 2026.04.22',
-      places: '해운대 · 광안리 · 감천문화마을',
-    },
-  ];
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [selectedBoard, setSelectedBoard] = useState<BoardDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [editing, setEditing] = useState(false);
+  const [boardTitle, setBoardTitle] = useState('');
+  const [boardContext, setBoardContext] = useState('');
+  const [visitedAt, setVisitedAt] = useState('');
+
+  // 내 보드 목록 불러오기
+  const loadBoards = async () => {
+    try {
+      setLoading(true);
+      const data = await getBoards();
+      setBoards(data);
+    } catch (error) {
+      console.error('보드 목록 조회 실패:', error);
+      Alert.alert('오류', '보드 목록을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 화면 진입 시 보드 목록 조회
+  useEffect(() => {
+    loadBoards();
+  }, []);
+
+  // 보드 상세 조회
+  const handleBoardDetail = async (boardId: number) => {
+    try {
+      const data = await getBoardDetail(boardId);
+
+      setSelectedBoard(data);
+      setSelectedTravel(boardId);
+      setBoardTitle(data.board_title);
+      setBoardContext(data.board_context ?? '');
+      setVisitedAt(data.visited_at);
+      setActiveTab('이미지');
+      setEditing(false);
+    } catch (error) {
+      console.error('보드 상세 조회 실패:', error);
+      Alert.alert('오류', '보드 상세 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  // 보드 수정
+  const handleUpdateBoard = async () => {
+    if (!selectedTravel) return;
+
+    try {
+      await updateBoard(selectedTravel, {
+        board_title: boardTitle,
+        board_context: boardContext,
+        visited_at: visitedAt,
+      });
+
+      const updatedBoard = await getBoardDetail(selectedTravel);
+      setSelectedBoard(updatedBoard);
+      setEditing(false);
+      await loadBoards();
+
+      Alert.alert('완료', '보드가 수정되었습니다.');
+    } catch (error) {
+      console.error('보드 수정 실패:', error);
+      Alert.alert('오류', '보드 수정에 실패했습니다.');
+    }
+  };
+
+  // 보드 삭제
+  const handleDeleteBoard = () => {
+    if (!selectedTravel) return;
+
+    Alert.alert('보드 삭제', '이 보드를 삭제할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteBoard(selectedTravel);
+            setSelectedTravel(null);
+            setSelectedBoard(null);
+            await loadBoards();
+            Alert.alert('완료', '보드가 삭제되었습니다.');
+          } catch (error) {
+            console.error('보드 삭제 실패:', error);
+            Alert.alert('오류', '보드 삭제에 실패했습니다.');
+          }
+        },
+      },
+    ]);
+  };
+
 
   // 여행 상세 화면
-  if (selectedTravel) {
-    const travel = travels.find(
-      (item) => item.id === selectedTravel
-    );
-
+  if (selectedTravel !== null && selectedBoard !== null) {
     return (
       <View style={styles.container}>
         <ScrollView
@@ -54,9 +139,56 @@ export default function BoardScreen() {
           </Pressable>
 
           {/* 여행 정보 */}
-          <Text style={styles.title}>{travel?.title}</Text>
-          <Text style={styles.date}>{travel?.date}</Text>
-          <Text style={styles.places}>{travel?.places}</Text>
+          <Text style={styles.title}>{selectedBoard?.board_title}</Text>
+          <Text style={styles.date}>{selectedBoard?.visited_at}</Text>
+          <Text style={styles.places}>{selectedBoard?.places.map((place) => place.destination_name).join(' . ')}</Text>
+
+
+          {editing ? (
+            <>
+              <TextInput
+                style={styles.expenseInput}
+                value={boardTitle}
+                onChangeText={setBoardTitle}
+                placeholder="보드 제목"
+              />
+              <TextInput
+                style={styles.memoInput}
+                value={boardContext}
+                onChangeText={setBoardContext}
+                placeholder="여행 메모"
+                multiline
+              />
+              <TextInput
+                style={styles.expenseInput}
+                value={visitedAt}
+                onChangeText={setVisitedAt}
+                placeholder="방문일 (YYYY-MM-DD)"
+              />
+              <Pressable style={styles.saveButton} onPress={handleUpdateBoard}>
+                <Text style={styles.saveButtonText}>수정 저장</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={styles.description}>
+                {selectedBoard?.board_context || '작성된 메모가 없습니다.'}
+              </Text>
+              <Pressable
+                style={styles.saveButton}
+                onPress={() => setEditing(true)}
+              >
+                <Text style={styles.saveButtonText}>보드 수정</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.saveButton, { backgroundColor: '#D66A6A' }]}
+                onPress={handleDeleteBoard}
+              >
+                <Text style={styles.saveButtonText}>보드 삭제</Text>
+              </Pressable>
+            </>
+          )}
+
 
           {/* 탭바 */}
           <View style={styles.tabBar}>
@@ -175,33 +307,42 @@ export default function BoardScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>내 여행</Text>
 
-          {travels.map((travel) => (
-            <Pressable
-              key={travel.id}
-              style={styles.travelCard}
-              onPress={() => {
-                setSelectedTravel(travel.id);
-                setActiveTab('이미지');
-              }}
-            >
 
-              <View style={styles.travelInfo}>
-                <Text style={styles.travelTitle}>
-                  {travel.title}
-                </Text>
+          {loading ? (
+            <Text>보드 목록을 불러오는 중...</Text>
+          ) : boards.length === 0 ? (
+            <Text style={styles.description}>
+              아직 등록된 여행 보드가 없습니다.
+            </Text>
+          ) : (
+            boards.map((board) => (
+              <Pressable
+                key={board.board_id}
+                style={styles.travelCard}
+                onPress={() => handleBoardDetail(board.board_id)}
+              >
+                <View style={styles.travelInfo}>
+                  <Text style={styles.travelTitle}>
+                    {board.board_title}
+                  </Text>
 
-                <Text style={styles.travelDate}>
-                  {travel.date}
-                </Text>
+                  <Text style={styles.travelDate}>
+                    {board.visited_at}
+                  </Text>
 
-                <Text style={styles.travelPlaces}>
-                  {travel.places}
-                </Text>
-              </View>
+                  <Text style={styles.travelPlaces}>
+                    {board.places
+                      .map((place) => place.destination_name)
+                      .join(' · ')}
+                  </Text>
+                </View>
 
-              <Text style={styles.arrow}>›</Text>
-            </Pressable>
-          ))}
+                <Text style={styles.arrow}>›</Text>
+              </Pressable>
+            ))
+          )}
+
+
         </View>
       </ScrollView>
 

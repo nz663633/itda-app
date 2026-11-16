@@ -1,16 +1,79 @@
 //설정 화면.
+import { useEffect, useState } from 'react';
+import { logout } from '@/api/axios';
 import AppTabs from '@/components/app-tabs';
 import { useRouter } from 'expo-router';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import {
+  getMyProfile,
+  deleteMyAccount,
+  type UserProfile,
+} from '@/api/user';
+import { clearTokens } from '@/utils/token';
 
 export default function SettingScreen() {
   const router = useRouter();
+
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  // 내 정보 조회
+  const loadProfile = async () => {
+    try {
+      const data = await getMyProfile();
+      setProfile(data);
+    } catch (error) {
+      console.error('내 정보 조회 실패:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  // 회원 탈퇴
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '회원 탈퇴',
+      '정말 탈퇴하시겠습니까? 코스와 보드 등 내 데이터도 함께 삭제됩니다.',
+      [
+        {
+          text: '취소',
+          style: 'cancel',
+        },
+        {
+          text: '탈퇴',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMyAccount();
+
+              // 저장된 로그인 토큰 삭제
+              await clearTokens();
+
+              Alert.alert('회원 탈퇴 완료', '회원 탈퇴가 완료되었습니다.', [
+                {
+                  text: '확인',
+                  onPress: () => router.replace('/'),
+                },
+              ]);
+            } catch (error) {
+              console.error('회원 탈퇴 실패:', error);
+              Alert.alert('오류', '회원 탈퇴에 실패했습니다.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
   return (
     <View style={styles.container}>
@@ -32,7 +95,9 @@ export default function SettingScreen() {
           </View>
 
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>다지지</Text>
+            <Text style={styles.profileName}>
+              {profile?.user_name ?? '사용자'}
+            </Text>
             <Text style={styles.profileDescription}>
               내 프로필을 관리해보세요.
             </Text>
@@ -51,12 +116,12 @@ export default function SettingScreen() {
         <SettingGroup title="앱 설정">
           <SettingItem
             title="알림"
-            onPress={() => {}}
+            onPress={() => { }}
           />
 
           <SettingItem
             title="앱 권한"
-            onPress={() => {}}
+            onPress={() => { }}
           />
         </SettingGroup>
 
@@ -64,12 +129,12 @@ export default function SettingScreen() {
         <SettingGroup title="약관 및 정책">
           <SettingItem
             title="서비스 이용약관"
-            onPress={() => {}}
+            onPress={() => { }}
           />
 
           <SettingItem
             title="개인정보처리방침"
-            onPress={() => {}}
+            onPress={() => { }}
           />
         </SettingGroup>
 
@@ -77,19 +142,19 @@ export default function SettingScreen() {
         <SettingGroup title="의견">
           <SettingItem
             title="의견 보내기"
-            onPress={() => {}}
+            onPress={() => { }}
           />
         </SettingGroup>
 
         {/* 로그아웃 / 회원탈퇴 */}
         <View style={styles.accountActions}>
-          <Pressable>
+          <Pressable onPress={logout}>
             <Text style={styles.logoutText}>로그아웃</Text>
           </Pressable>
 
           <View style={styles.actionDivider} />
 
-          <Pressable>
+          <Pressable onPress={handleDeleteAccount}>
             <Text style={styles.deleteText}>회원탈퇴</Text>
           </Pressable>
         </View>

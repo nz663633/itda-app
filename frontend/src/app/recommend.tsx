@@ -1,7 +1,8 @@
 // 여행 코스 화면.
 import AppTabs from '@/components/app-tabs';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -10,6 +11,51 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import api from '@/api/axios';
+import {
+  getCourses,
+  createCourse,
+  addDestinationToCourse,
+  getCourseDetail,
+  removeDestinationFromCourse,
+  updateCourse,
+  deleteCourse,
+  type Course,
+  type CourseDestination,
+} from '@/api/course';
+import { createBoard } from '@/api/board';
+
+//옵션 타입 
+type PreferenceOption = {
+  option_id: number;
+  option_name: string;
+};
+//카데고리 타입
+type PreferenceCategory = {
+  category_id: number;
+  category_name: string;
+  options: PreferenceOption[];
+};
+//지역 타입
+type Region = {
+  region_id: number;
+  region_name: string;
+};
+//추천 지역 상세 조회 타입 
+type DestinationDetail = {
+  destination_id: number;
+  destination_name: string;
+  region: {
+    region_id: number;
+    region_name: string;
+  };
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  image_url: string | null;
+  description: string | null;
+  tags: string[];
+};
 
 export default function RecommendScreen() {
   // 여행지 추천 영역 열기/닫기
@@ -19,7 +65,7 @@ export default function RecommendScreen() {
   const [showRecommendations, setShowRecommendations] = useState(false);
 
   // 선택한 여행 스타일
-  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+  const [selectedStyles, setSelectedStyles] = useState<number[]>([]);
 
   // 내 코스에 담긴 여행지
   const [selectedPlaces, setSelectedPlaces] = useState([
@@ -28,37 +74,11 @@ export default function RecommendScreen() {
     '영종도',
   ]);
 
-  const destinations = [
-    {
-      name: '속초',
-      description: '바다에서 포켓몬고',
-    },
-    {
-      name: '인천',
-      description: '도시와 바다를 함께',
-    },
-    {
-      name: '여수',
-      description: '여수 밤바다',
-    },
-  ];
-
-  const travelStyles = [
-    '자연',
-    '바다',
-    '도시',
-    '맛집',
-    '혼자',
-    '친구',
-    '연인',
-    '가족',
-  ];
-
-  const toggleStyle = (style: string) => {
+  const toggleStyle = (optionId: number) => {
     setSelectedStyles((prev) =>
-      prev.includes(style)
-        ? prev.filter((item) => item !== style)
-        : [...prev, style]
+      prev.includes(optionId)
+        ? prev.filter((id) => id !== optionId)
+        : [...prev, optionId]
     );
   };
 
@@ -72,6 +92,327 @@ export default function RecommendScreen() {
   const resetRecommendation = () => {
     setSelectedStyles([]);
     setShowRecommendations(false);
+  };
+
+  // 서버에서 가져온 취향 질문
+  const [preferenceOptions, setPreferenceOptions] =
+    useState<PreferenceCategory[]>([]);
+
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
+
+  // 내 코스 목록
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  // 취향 질문 조회
+  const getPreferences = async () => {
+    try {
+      setLoadingPreferences(true);
+
+      const response = await api.get('/preferences/options');
+
+      console.log('취향 질문 조회 성공:', response.data);
+
+      setPreferenceOptions(response.data.categories);
+    } catch (error) {
+      console.error('취향 질문 조회 실패:', error);
+    } finally {
+      setLoadingPreferences(false);
+    }
+  };
+
+  // 내 코스 목록 조회
+  const loadCourses = async () => {
+    try {
+      setLoadingCourses(true);
+
+      const data = await getCourses();
+      setCourses(data);
+
+      console.log('내 코스 조회 성공:', data);
+    } catch (error) {
+      console.error('내 코스 조회 실패:', error);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+  // 코스 상세 조회
+  const handleCourseDetail = async (courseId: number) => {
+    try {
+      const data = await getCourseDetail(courseId);
+      setSelectedCourse(data);
+      setEditingCourseTitle(data.course_title);
+
+      console.log('코스 상세 조회 성공:', data);
+    } catch (error) {
+      console.error('코스 상세 조회 실패:', error);
+      alert('코스 상세 정보를 불러오지 못했습니다.');
+    }
+  };
+  //코스에서 여행지 삭제
+  const handleRemoveDestination = async (destinationId: number) => {
+    if (!selectedCourse) return;
+
+    try {
+      await removeDestinationFromCourse(
+        selectedCourse.course_id,
+        destinationId
+      );
+
+      alert('여행지를 삭제했습니다.');
+
+      await handleCourseDetail(selectedCourse.course_id);
+      await loadCourses();
+    } catch (error) {
+      console.error('여행지 삭제 실패:', error);
+      alert('여행지 삭제에 실패했습니다.');
+    }
+  };
+
+  //코스 제목 수정
+  const handleUpdateCourse = async () => {
+    if (!selectedCourse || !editingCourseTitle.trim()) {
+      alert('코스 제목을 입력해 주세요.');
+      return;
+    }
+
+    try {
+      await updateCourse(
+        selectedCourse.course_id,
+        editingCourseTitle.trim()
+      );
+
+      alert('코스 제목을 수정했습니다.');
+
+      await handleCourseDetail(selectedCourse.course_id);
+      await loadCourses();
+    } catch (error) {
+      console.error('코스 수정 실패:', error);
+      alert('코스 수정에 실패했습니다.');
+    }
+  };
+
+
+  //코스 생성
+  const handleCreateCourse = async () => {
+    if (!courseTitle.trim()) {
+      alert('코스 제목을 입력해 주세요.');
+      return;
+    }
+
+    try {
+      setCreatingCourse(true);
+
+      await createCourse(courseTitle.trim());
+
+      alert('코스가 생성되었습니다.');
+
+      setCourseTitle('');
+      setShowCreateCourse(false);
+
+      // 코스 목록 새로고침
+      await loadCourses();
+    } catch (error) {
+      console.error('코스 생성 실패:', error);
+      alert('코스 생성에 실패했습니다.');
+    } finally {
+      setCreatingCourse(false);
+    }
+  };
+  // 코스 삭제 함수
+  const handleDeleteCourse = async (courseId: number) => {
+    try {
+      await deleteCourse(courseId);
+
+      alert('코스를 삭제했습니다.');
+
+      setSelectedCourse(null);
+      await loadCourses();
+    } catch (error) {
+      console.error('코스 삭제 실패:', error);
+      alert('코스 삭제에 실패했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    getPreferences();
+    getRegions();
+    loadCourses();
+  }, []);
+
+  const handleRecommend = async () => {
+    if (selectedStyles.length === 0) {
+      alert('취향을 하나 이상 선택해 주세요.');
+      return;
+    }
+
+    try {
+      // 1. 선택한 취향 DB에 저장
+      await api.put('/users/me/preferences', {
+        option_ids: selectedStyles,
+      });
+
+      // 2. 저장된 취향으로 여행지 추천 요청
+      const response = await api.get('/destinations/recommendations', {
+        params: {
+          limit: 10,
+          ...(selectedRegionId !== null && {
+            region_id: selectedRegionId,
+          }),
+        },
+      });
+
+      // 3. 추천 결과 저장
+      setRecommendations(response.data.destinations);
+      setShowRecommendations(true);
+
+      console.log('추천 결과:', response.data);
+    } catch (error) {
+      console.error('여행지 추천 실패:', error);
+      alert('추천을 불러오지 못했습니다.');
+    }
+  };
+  //지역 상태
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
+
+  //지역 목록 조회
+  const getRegions = async () => {
+    try {
+      const response = await api.get('/regions');
+      setRegions(response.data.regions);
+      console.log('지역 목록 조회 성공:', response.data);
+    } catch (error) {
+      console.error('지역 목록 조회 실패:', error);
+    }
+  };
+  //추천 여행지 상세 정보 상태
+  const [selectedDestination, setSelectedDestination] =
+    useState<DestinationDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  //상세 정보 조회
+  const getDestinationDetail = async (destinationId: number) => {
+    try {
+      setLoadingDetail(true);
+
+      const response = await api.get(`/destinations/${destinationId}`);
+
+      setSelectedDestination(response.data);
+      console.log('여행지 상세 조회 성공:', response.data);
+    } catch (error) {
+      console.error('여행지 상세 조회 실패:', error);
+      alert('여행지 상세 정보를 불러오지 못했습니다.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  // 코스 생성 UI
+  const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const [courseTitle, setCourseTitle] = useState('');
+  const [creatingCourse, setCreatingCourse] = useState(false);
+
+  // 여행지를 담을 코스 선택
+  const [showCourseSelect, setShowCourseSelect] = useState(false);
+  const [selectedDestinationId, setSelectedDestinationId] =
+    useState<number | null>(null);
+  const [addingDestination, setAddingDestination] = useState(false);
+  //코스 선택
+  const openCourseSelect = (destinationId: number) => {
+    setSelectedDestinationId(destinationId);
+    setShowCourseSelect(true);
+  };
+  //코스에 여행지 추가 함수 
+  const handleAddToCourse = async (courseId: number) => {
+    if (selectedDestinationId === null) return;
+
+    try {
+      setAddingDestination(true);
+
+      await addDestinationToCourse(
+        courseId,
+        selectedDestinationId
+      );
+
+      alert('코스에 여행지를 추가했습니다.');
+
+      setShowCourseSelect(false);
+      setSelectedDestinationId(null);
+
+      await loadCourses();
+    } catch (error) {
+      console.error('코스에 여행지 추가 실패:', error);
+      alert('여행지를 추가하지 못했습니다. 이미 포함된 여행지인지 확인해 주세요.');
+    } finally {
+      setAddingDestination(false);
+    }
+  };
+
+  // 선택한 코스 상세 정보
+  const [selectedCourse, setSelectedCourse] = useState<{
+    course_id: number;
+    course_title: string;
+    destinations: CourseDestination[];
+  } | null>(null);
+
+  // 코스 제목 수정
+  const [editingCourseTitle, setEditingCourseTitle] = useState('');
+
+  // 여행 완료 및 트래블보드 생성
+  const handleCompleteCourse = () => {
+    if (!selectedCourse) return;
+
+    if (selectedCourse.destinations.length === 0) {
+      Alert.alert('알림', '여행지가 담긴 코스만 여행 완료할 수 있습니다.');
+      return;
+    }
+
+    Alert.alert(
+      '여행 완료',
+      '이 코스를 트래블보드에 기록할까요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '기록하기',
+          onPress: async () => {
+            try {
+              // 한국 현지 날짜 기준
+              const today = new Date();
+              const visitedAt = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0'),
+              ].join('-');
+
+              await createBoard({
+                course_id: selectedCourse.course_id,
+                board_title: editingCourseTitle.trim() || '나의 여행',
+                board_context: '',
+                visited_at: visitedAt,
+              });
+
+              Alert.alert(
+                '등록 완료',
+                '트래블보드에 여행 기록이 생성되었습니다.',
+                [
+                  {
+                    text: '확인',
+                    onPress: () => setSelectedCourse(null),
+                  },
+                ]
+              );
+            } catch (error) {
+              console.error('트래블보드 생성 실패:', error);
+              Alert.alert('오류', '트래블보드 생성에 실패했습니다.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -127,35 +468,88 @@ export default function RecommendScreen() {
               <Text style={styles.sectionTitle}>
                 여행 스타일
               </Text>
-
               <View style={styles.tagContainer}>
-                {travelStyles.map((style) => (
+
+                <Text style={styles.sectionTitle}>여행 지역 선택</Text>
+                <Pressable
+                  style={[
+                    styles.tag,
+                    selectedRegionId === null && styles.selectedTag,
+                  ]}
+                  onPress={() => setSelectedRegionId(null)}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      selectedRegionId === null && styles.selectedTagText,
+                    ]}
+                  >
+                    전체
+                  </Text>
+                </Pressable>
+
+                {regions.map((region) => (
                   <Pressable
-                    key={style}
+                    key={region.region_id}
                     style={[
                       styles.tag,
-                      selectedStyles.includes(style) &&
-                        styles.selectedTag,
+                      selectedRegionId === region.region_id && styles.selectedTag,
                     ]}
-                    onPress={() => toggleStyle(style)}
+                    onPress={() => setSelectedRegionId(region.region_id)}
                   >
                     <Text
                       style={[
                         styles.tagText,
-                        selectedStyles.includes(style) &&
-                          styles.selectedTagText,
+                        selectedRegionId === region.region_id && styles.selectedTagText,
                       ]}
                     >
-                      {style}
+                      {region.region_name}
                     </Text>
                   </Pressable>
                 ))}
+
+                {loadingPreferences ? (
+                  <Text>취향 옵션을 불러오는 중...</Text>
+                ) : (
+                  preferenceOptions.map((category) => (
+                    <View key={category.category_id}>
+                      <Text style={styles.sectionTitle}>
+                        {category.category_name}
+                      </Text>
+
+                      <View style={styles.tagContainer}>
+                        {category.options.map((option) => (
+                          <Pressable
+                            key={option.option_id}
+                            style={[
+                              styles.tag,
+                              selectedStyles.includes(option.option_id) &&
+                              styles.selectedTag,
+                            ]}
+                            onPress={() => toggleStyle(option.option_id)}
+                          >
+                            <Text
+                              style={[
+                                styles.tagText,
+                                selectedStyles.includes(option.option_id) &&
+                                styles.selectedTagText,
+                              ]}
+                            >
+                              {option.option_name}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ))
+                )}
+
               </View>
 
               {/* 추천받기 */}
               <Pressable
                 style={styles.recommendButton}
-                onPress={() => setShowRecommendations(true)}
+                onPress={handleRecommend}
               >
                 <Image
                   source={require('../../assets/images/tabIcons/recommend.png')}
@@ -195,116 +589,273 @@ export default function RecommendScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.destinationList}
                   >
-                    {destinations.map((destination) => (
+                    {recommendations.map((destination) => (
                       <DestinationCard
-                        key={destination.name}
-                        name={destination.name}
-                        description={destination.description}
-                        onAdd={() =>
-                          addPlace(destination.name)
-                        }
+                        key={destination.destination_id}
+                        name={destination.destination_name}
+                        description={destination.region?.region_name ?? ''}
+                        onAdd={() => openCourseSelect(destination.destination_id)}
+                        onDetail={() => getDestinationDetail(destination.destination_id)}
                       />
                     ))}
                   </ScrollView>
+
                 </View>
               )}
+
+              {loadingDetail && (
+                <Text>상세 정보를 불러오는 중...</Text>
+              )}
+
+              {selectedDestination && (
+                <View style={styles.destinationCard}>
+                  {/* 여행지 사진 */}
+                  {selectedDestination.image_url && (
+                    <Image
+                      source={{ uri: selectedDestination.image_url }}
+                      style={{ width: '100%', height: 200, borderRadius: 12 }}
+                      resizeMode="cover"
+                    />
+                  )}
+
+                  {/* 여행지 이름 */}
+                  <Text style={styles.destinationName}>
+                    {selectedDestination.destination_name}
+                  </Text>
+
+                  {/* 지역 및 주소 */}
+                  <Text style={styles.destinationDescription}>
+                    {selectedDestination.region?.region_name}
+                  </Text>
+
+                  <Text>
+                    {selectedDestination.address ?? '주소 정보 없음'}
+                  </Text>
+
+                  {/* 여행지 설명 */}
+                  <Text>
+                    {selectedDestination.description ?? '소개 정보 없음'}
+                  </Text>
+
+                  {/* 태그 */}
+                  <View style={styles.tagContainer}>
+                    {selectedDestination.tags?.map((tag: string) => (
+                      <View key={tag} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* 닫기 */}
+                  <Pressable
+                    onPress={() => setSelectedDestination(null)}
+                  >
+                    <Text>닫기</Text>
+                  </Pressable>
+                </View>
+              )}
+
             </View>
           )}
         </View>
 
         {/* 내 코스 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            내 코스
-          </Text>
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <Text style={styles.sectionTitle}>내 코스</Text>
 
-          {/* 여행 이름 */}
-          <Text style={styles.inputLabel}>
-            여행 이름
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="여행 이름을 입력해주세요."
-            placeholderTextColor="#AAAAAA"
-          />
-
-          {/* 여행 날짜 */}
-          <Text style={styles.inputLabel}>
-            여행 날짜
-          </Text>
-
-          <View style={styles.dateRow}>
-            <View style={styles.dateBox}>
-              <Text style={styles.dateText}>
-                10/02
+            <Pressable
+              onPress={() => setShowCreateCourse(true)}
+              style={styles.addDestinationButton}
+            >
+              <Text style={styles.addDestinationText}>
+                ＋ 코스 만들기
               </Text>
-            </View>
-
-            <Text style={styles.dateSeparator}>
-              ~
-            </Text>
-
-            <View style={styles.dateBox}>
-              <Text style={styles.dateText}>
-                10/04
-              </Text>
-            </View>
+            </Pressable>
           </View>
-
-          {/* 선택한 여행지 */}
-          <Text style={styles.inputLabel}>
-            선택한 여행지 {selectedPlaces.length}곳
-          </Text>
-
-          <View style={styles.placeList}>
-            {selectedPlaces.map((place, index) => (
-              <PlaceItem
-                key={place}
-                number={index + 1}
-                name={place}
-              />
-            ))}
-          </View>
-
-          {/* 여행지 추가 */}
-          <Pressable style={styles.addPlaceButton}>
-            <Text style={styles.addPlaceText}>
-              ＋ 여행지 추가하기
-            </Text>
-          </Pressable>
-
-          {/* 코스 저장 */}
-          <Pressable style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>
-              코스 저장하기
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* 내 여행 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            내 여행
-          </Text>
 
           <Text style={styles.description}>
-            저장한 여행을 확인하고 수정할 수 있어요.
+            저장한 여행 코스를 확인하고 관리할 수 있어요.
           </Text>
 
-          <SavedTravelCard
-            title="부산 커플 여행"
-            date="10/09 ~ 10/14"
-            places="해운대 · 광안리 · 서면카페거리"
-          />
+          {/* 코스 생성 입력창 */}
+          {showCreateCourse && (
+            <View style={styles.destinationCard}>
+              <Text style={styles.sectionTitle}>
+                새 코스 만들기
+              </Text>
 
-          <SavedTravelCard
-            title="대전 빵투어"
-            date="10/15 ~ 10/16"
-            places="성심당 · 우동야"
-          />
+              <TextInput
+                style={styles.input}
+                placeholder="코스 제목을 입력하세요."
+                value={courseTitle}
+                onChangeText={setCourseTitle}
+                maxLength={50}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10, }}>
+                <Pressable
+                  style={styles.addDestinationButton}
+                  onPress={() => {
+                    setShowCreateCourse(false);
+                    setCourseTitle('');
+                  }}
+                >
+                  <Text style={styles.addDestinationText}>취소</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.addDestinationButton}
+                  onPress={handleCreateCourse}
+                  disabled={creatingCourse}
+                >
+                  <Text style={styles.addDestinationText}>
+                    {creatingCourse ? '생성 중...' : '생성하기'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* 내 코스 목록 */}
+          {loadingCourses ? (
+            <Text>코스 목록을 불러오는 중...</Text>
+          ) : courses.length === 0 ? (
+            <Text>아직 생성한 코스가 없습니다.</Text>
+          ) : (
+            courses.map((course) => (
+              <SavedTravelCard
+                key={course.course_id}
+                title={course.course_title}
+                destinationCount={course.destination_count}
+                onPress={() => handleCourseDetail(course.course_id)}
+              />
+            ))
+          )}
+
+          {/* 코스 상세 정보 */}
+          {selectedCourse && (
+            <View style={styles.destinationCard}>
+              <Text style={styles.sectionTitle}>
+                코스 상세 정보
+              </Text>
+
+              {/* 코스 제목 수정 */}
+              <TextInput
+                style={styles.input}
+                value={editingCourseTitle}
+                onChangeText={setEditingCourseTitle}
+                placeholder="코스 제목"
+                maxLength={50}
+              />
+
+              <Pressable
+                style={styles.addDestinationButton}
+                onPress={handleUpdateCourse}
+              >
+                <Text style={styles.addDestinationText}>
+                  제목 수정
+                </Text>
+              </Pressable>
+
+              {/* 여행지 목록 */}
+              <Text>
+                선택한 여행지 {selectedCourse.destinations.length}곳
+              </Text>
+
+              {selectedCourse.destinations.length === 0 ? (
+                <Text>아직 담긴 여행지가 없습니다.</Text>
+              ) : (
+                selectedCourse.destinations.map((destination) => (
+                  <View
+                    key={destination.destination_id}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginVertical: 8,
+                    }}
+                  >
+                    <Text>
+                      {destination.visit_order}. {destination.destination_name}
+                    </Text>
+
+                    <Pressable
+                      onPress={() =>
+                        handleRemoveDestination(destination.destination_id)
+                      }
+                    >
+                      <Text style={{ color: 'red' }}>삭제</Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+
+              {/* 여행 완료 및 트래블보드 생성 */}
+              <Pressable
+                style={styles.addDestinationButton}
+                onPress={handleCompleteCourse}
+              >
+                <Text style={styles.addDestinationText}>
+                  여행 완료하고 트래블보드 만들기
+                </Text>
+              </Pressable>
+
+              {/* 코스 삭제 */}
+              <Pressable
+                style={styles.addDestinationButton}
+                onPress={() => handleDeleteCourse(selectedCourse.course_id)}
+              >
+                <Text style={{ color: 'red' }}>코스 삭제</Text>
+              </Pressable>
+
+              {/* 상세 정보 닫기 */}
+              <Pressable onPress={() => setSelectedCourse(null)}>
+                <Text>상세 정보 닫기</Text>
+              </Pressable>
+            </View>
+          )}
+
         </View>
+
       </ScrollView>
+
+      {/* 코스 선택 */}
+      {showCourseSelect && (
+        <View style={styles.destinationCard}>
+          <Text style={styles.sectionTitle}>
+            여행지를 담을 코스를 선택하세요.
+          </Text>
+
+          {courses.length === 0 ? (
+            <Text>먼저 코스를 만들어 주세요.</Text>
+          ) : (
+            courses.map((course) => (
+              <Pressable
+                key={course.course_id}
+                style={styles.addDestinationButton}
+                onPress={() => handleAddToCourse(course.course_id)}
+                disabled={addingDestination}
+              >
+                <Text style={styles.addDestinationText}>
+                  {course.course_title}
+                  {' '}({course.destination_count}곳)
+                </Text>
+              </Pressable>
+            ))
+          )}
+
+          <Pressable
+            onPress={() => setShowCourseSelect(false)}
+          >
+            <Text>취소</Text>
+          </Pressable>
+        </View>
+      )}
 
       <AppTabs />
     </View>
@@ -346,22 +897,26 @@ function DestinationCard({
   name,
   description,
   onAdd,
+  onDetail,
 }: {
   name: string;
   description: string;
   onAdd: () => void;
+  onDetail: () => void;
 }) {
   return (
     <View style={styles.destinationCard}>
-      <View style={styles.destinationImage}>
-        <Text style={styles.imageText}>사진</Text>
-      </View>
+      <Pressable onPress={onDetail}>
+        <View style={styles.destinationImage}>
+          <Text style={styles.imageText}>사진</Text>
+        </View>
 
-      <Text style={styles.destinationName}>{name}</Text>
+        <Text style={styles.destinationName}>{name}</Text>
 
-      <Text style={styles.destinationDescription}>
-        {description}
-      </Text>
+        <Text style={styles.destinationDescription}>
+          {description}
+        </Text>
+      </Pressable>
 
       <Pressable
         style={styles.addDestinationButton}
@@ -394,36 +949,35 @@ function PlaceItem({
   );
 }
 
-/* 저장한 여행 */
+/* 저장한 코스 */
 function SavedTravelCard({
   title,
-  date,
-  places,
+  destinationCount,
+  onPress,
 }: {
   title: string;
-  date: string;
-  places: string;
+  destinationCount: number;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.savedTravelCard}>
+    <Pressable
+      style={styles.savedTravelCard}
+      onPress={onPress}
+    >
       <View style={styles.savedTravelInfo}>
         <Text style={styles.savedTravelTitle}>
           {title}
         </Text>
 
-        <Text style={styles.savedTravelDate}>
-          {date}
-        </Text>
-
         <Text style={styles.savedTravelPlaces}>
-          {places}
+          여행지 {destinationCount}곳
         </Text>
       </View>
 
-      <Pressable>
-        <Text style={styles.editText}>수정 →</Text>
-      </Pressable>
-    </View>
+      <Text style={styles.editText}>
+        상세 보기 →
+      </Text>
+    </Pressable>
   );
 }
 
